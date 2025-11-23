@@ -361,25 +361,76 @@ void dibujarPulmonMalla(bool izquierdo)
     }
 }
 
+void dibujarVertebra(float radio, float altura)
+{
+    // 1. CUERPO (Cilindro principal)
+    int lados = 12;
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int i = 0; i <= lados; i++) {
+        float a = i * 6.2831f / lados;
+        float x = cos(a); float z = sin(a);
+
+        // Normales suavizadas para que parezca hueso redondo
+        glNormal3f(x, 0, z);
+        glVertex3f(x * radio, altura / 2, z * radio);
+        glVertex3f(x * radio, -altura / 2, z * radio);
+    }
+    glEnd();
+
+    // 2. PROCESO ESPINOSO (El hueso que sale hacia atrás)
+    // Simulamos esto con una caja alargada hacia atrás en el eje -Z
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, -radio); // Mover al borde trasero
+    // Escalar para formar una aleta: delgada en X, alta en Y, larga en Z
+    glScalef(0.15f, altura * 0.8f, 0.5f);
+
+    // Dibujar cubo simple
+    glBegin(GL_QUADS);
+    // Atrás
+    glNormal3f(0, 0, -1);
+    glVertex3f(-0.5f, 0.5f, -1.0f); glVertex3f(0.5f, 0.5f, -1.0f);
+    glVertex3f(0.5f, -0.5f, -1.0f); glVertex3f(-0.5f, -0.5f, -1.0f);
+    // Lados
+    glNormal3f(1, 0, 0); // Der
+    glVertex3f(0.5f, 0.5f, 0.0f); glVertex3f(0.5f, 0.5f, -1.0f);
+    glVertex3f(0.5f, -0.5f, -1.0f); glVertex3f(0.5f, -0.5f, 0.0f);
+    glNormal3f(-1, 0, 0); // Izq
+    glVertex3f(-0.5f, 0.5f, -1.0f); glVertex3f(-0.5f, 0.5f, 0.0f);
+    glVertex3f(-0.5f, -0.5f, 0.0f); glVertex3f(-0.5f, -0.5f, -1.0f);
+    glEnd();
+    glPopMatrix();
+}
+
 void dibujarCostillas()
 {
     glColor4f(0.9f, 0.9f, 0.85f, 1.0f); // Color Hueso
 
-    // 1. COLUMNA VERTEBRAL (Sin cambios)
+    // --- 1. COLUMNA VERTEBRAL (SEGMENTADA) ---
     glPushMatrix();
-    glTranslatef(0.0f, -0.8f, -2.0f);
-    glScalef(0.4f, 5.0f, 0.4f);
+    // Posicionamos la columna detrás de los pulmones
+    glTranslatef(0.0f, -0.5f, -2.0f);
 
-    int ladosCol = 12;
-    glBegin(GL_TRIANGLE_STRIP);
-    for (int i = 0; i <= ladosCol; i++) {
-        float a = i * 6.2831f / ladosCol;
-        float x = cos(a); float z = sin(a);
-        glNormal3f(x, 0, z);
-        glVertex3f(x, 0.5f, z);
-        glVertex3f(x, -0.6f, z);
+    int numVertebras = 18; // Cantidad de vértebras
+    float alturaTotal = 5.0f;
+    float alturaVertebra = alturaTotal / numVertebras;
+
+    // Dibujamos una pila de vértebras
+    for (int i = 0; i < numVertebras; i++)
+    {
+        glPushMatrix();
+        // Calculamos la Y para apilarlas. 
+        // (i - numVertebras/2) centra la pila verticalmente
+        float yRel = (i - numVertebras / 2.0f) * alturaVertebra;
+
+        glTranslatef(0.0f, yRel, 0.0f);
+
+        // Pequeña variación de tamaño para que no se vea como un tubo perfecto
+        float escalaAncho = 1.0f + 0.1f * sin(i * 0.5f);
+
+        // Dibujamos la vértebra (Radio 0.4, Altura con un pequeño gap para el disco)
+        dibujarVertebra(0.35f * escalaAncho, alturaVertebra * 0.85f);
+        glPopMatrix();
     }
-    glEnd();
     glPopMatrix();
 
     // 2. COSTILLAS (Con efecto abanico)
