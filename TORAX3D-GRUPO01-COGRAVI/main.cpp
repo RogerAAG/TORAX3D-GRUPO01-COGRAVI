@@ -1,7 +1,7 @@
 #include <iostream> // Se incluye libreria para manejo de entrada/salida
 #include <vector> // Se incluye libreria para manejo de vectores
 #include <cmath> // Se incluye libreria para funciones matematicas
-#include <GLFW/glfw3.h> //
+#include <GLFW/glfw3.h> 
 #define STB_IMAGE_IMPLEMENTATION // Definición para implementación de stb_image
 #include "include/stb_image.h" // Se incluye libreria para carga de imagenes
 
@@ -20,7 +20,9 @@ float factorRespiracion = 1.0f;
 // ESTADO: Transparencia
 bool transPulmonIzq = false;
 bool transPulmonDer = false;
-
+// Visibilidad de Costillas
+bool mostrarCostillas = true;
+bool tecla3Presionada = false;
 // Control de teclas (rebote)
 bool tecla1Presionada = false;
 bool tecla2Presionada = false;
@@ -173,6 +175,15 @@ void procesarEntrada(GLFWwindow* ventana)
         }
     }
     else tecla2Presionada = false;
+
+    // TECLA 3: Mostrar/Ocultar Costillas
+    if (glfwGetKey(ventana, GLFW_KEY_3) == GLFW_PRESS) {
+        if (!tecla3Presionada) {
+            mostrarCostillas = !mostrarCostillas;
+            tecla3Presionada = true;
+        }
+    }
+    else tecla3Presionada = false;
 }
 
 // --- GEOMETRÍA ---
@@ -350,10 +361,73 @@ void dibujarPulmonMalla(bool izquierdo)
     }
 }
 
+void dibujarCostillas()
+{
+    glColor4f(0.9f, 0.9f, 0.85f, 1.0f); // Color Hueso
+
+    // 1. COLUMNA VERTEBRAL (Atrás)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.8f, 2.0f); // Posición trasera central
+    glScalef(0.4f, 5.0f, 0.4f);      // Alta y delgada
+
+    // Dibujar cilindro simple para la columna
+    int ladosCol = 12;
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int i = 0; i <= ladosCol; i++) {
+        float a = i * 6.2831f / ladosCol;
+        float x = cos(a); float z = sin(a);
+        glNormal3f(x, 0, z);
+        glVertex3f(x, 0.5f, z);
+        glVertex3f(x, -0.6f, z);
+    }
+    glEnd();
+    glPopMatrix();
+
+    // 2. COSTILLAS (Arcos)
+    int numCostillas = 10;
+    for (int i = 0; i < numCostillas; i++)
+    {
+        float yPos = 1.0f - (i * 0.5f); // Altura de cada costilla
+
+        // Ajuste de forma: Más anchas en el medio, más estrechas arriba/abajo
+        // Ancho base 2.8 para librar los pulmones (que están en 1.6)
+        float ancho = 2.8f + sin(i * 0.3f) * 0.4f;
+        float profundidad = 1.8f;
+
+        glPushMatrix();
+        glTranslatef(0.0f, yPos, 0.0f); // Centradas en la columna
+        glScalef(ancho, 0.15f, profundidad); // Achatadas (forma de cinta)
+
+        // Dibujar el arco (Dejamos un hueco en frente para el esternón)
+        glBegin(GL_TRIANGLE_STRIP);
+        for (int k = -24; k <= 24; k++) // Rango de ángulo (no cierra el círculo completo)
+        {
+            float ang = k * 0.1f; // Radianes
+            // Normales hacia afuera
+            float x = sin(ang);
+            float z = cos(ang); // Z positivo es hacia el frente aquí
+
+            glNormal3f(x, 0, z);
+
+            // Pared externa e interna de la costilla
+            // Usamos un radio de 1.0 (base) y un grosor pequeño
+            glVertex3f(x * 1.05f, 0.5f, z * 1.05f);
+            glVertex3f(x * 0.95f, -0.5f, z * 0.95f);
+        }
+        glEnd();
+        glPopMatrix();
+    }
+}
+
 void dibujarModeloCompleto()
 {
     // 1. DIBUJAR ESTRUCTURA INTERNA
     dibujarTraqueaYBronquios();
+
+    // 2. Costillas (NUEVO)
+    if (mostrarCostillas) {
+        dibujarCostillas();
+    }
 
     if (texturaPulmonID != 0) {
         glEnable(GL_TEXTURE_2D);
