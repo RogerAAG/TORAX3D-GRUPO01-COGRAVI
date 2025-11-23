@@ -133,7 +133,7 @@ void procesarEntrada(GLFWwindow* ventana)
         glfwSetWindowShouldClose(ventana, true);
 
     // --- CONTROL DE CÁMARA (FLECHAS) ---
-    float velRotacion = 0.01f; // Velocidad de giro
+    float velRotacion = 0.03f; // Velocidad de giro
     float velZoom = 0.01f;     // Velocidad de zoom
 
     // Rotación Y (Izquierda / Derecha)
@@ -365,12 +365,11 @@ void dibujarCostillas()
 {
     glColor4f(0.9f, 0.9f, 0.85f, 1.0f); // Color Hueso
 
-    // 1. COLUMNA VERTEBRAL (Atrás)
+    // 1. COLUMNA VERTEBRAL (Sin cambios)
     glPushMatrix();
-    glTranslatef(0.0f, -0.8f, 2.0f); // Posición trasera central
-    glScalef(0.4f, 5.0f, 0.4f);      // Alta y delgada
+    glTranslatef(0.0f, -0.8f, -2.0f);
+    glScalef(0.4f, 5.0f, 0.4f);
 
-    // Dibujar cilindro simple para la columna
     int ladosCol = 12;
     glBegin(GL_TRIANGLE_STRIP);
     for (int i = 0; i <= ladosCol; i++) {
@@ -383,38 +382,75 @@ void dibujarCostillas()
     glEnd();
     glPopMatrix();
 
-    // 2. COSTILLAS (Arcos)
+    // 2. COSTILLAS (Con efecto abanico)
     int numCostillas = 10;
+    int ladosTubo = 12;
+    float radioTubo = 0.08f;
+
     for (int i = 0; i < numCostillas; i++)
     {
-        float yPos = 1.0f - (i * 0.5f); // Altura de cada costilla
+        // --- AJUSTE 1: POSICIÓN VERTICAL ---
+        // Usamos 0.38f en vez de 0.45f para pegarlas más entre sí desde la base.
+        float yPos = 1.2f - (i * 0.7f);
 
-        // Ajuste de forma: Más anchas en el medio, más estrechas arriba/abajo
-        // Ancho base 2.8 para librar los pulmones (que están en 1.6)
-        float ancho = 2.8f + sin(i * 0.3f) * 0.4f;
-        float profundidad = 1.8f;
+        // --- AJUSTE 2: FORMA DEL TÓRAX ---
+        float ancho = 2.5f + sin(i * 0.35f) * 1.0f;
+        float profundidad = 2.0f;
+
+        // --- AJUSTE 3: ÁNGULO DE CAÍDA (ABANICO) ---
+        // Fórmula Cuadrática: (i * i * 0.5f)
+        // Esto hace que las primeras costillas apenas roten (se mantengan juntas)
+        // y las últimas roten muchísimo más rápido (se separen).
+        // i=0 -> 10 grados
+        // i=1 -> 10.5 grados (Diferencia 0.5) -> ¡Muy pegadas!
+        // i=9 -> 50.5 grados (Diferencia grande) -> ¡Muy separadas!
+        float anguloCaida = 10.0f + (i * i * 0.5f);
+
+        // Límite del arco (Tu lógica anterior, mantenida)
+        int limiteArco = 29 - (i * 0.8);
 
         glPushMatrix();
-        glTranslatef(0.0f, yPos, 0.0f); // Centradas en la columna
-        glScalef(ancho, 0.15f, profundidad); // Achatadas (forma de cinta)
+        glTranslatef(0.0f, yPos, -0.3f);
+        glRotatef(anguloCaida, 1.0f, 0.0f, 0.0f);
+        glScalef(ancho, 1.0f, profundidad);
 
-        // Dibujar el arco (Dejamos un hueco en frente para el esternón)
-        glBegin(GL_TRIANGLE_STRIP);
-        for (int k = -24; k <= 24; k++) // Rango de ángulo (no cierra el círculo completo)
+        for (int k = -limiteArco; k < limiteArco; k++)
         {
-            float ang = k * 0.1f; // Radianes
-            // Normales hacia afuera
-            float x = sin(ang);
-            float z = cos(ang); // Z positivo es hacia el frente aquí
+            float ang1 = k * 0.1f;
+            float ang2 = (k + 1) * 0.1f;
 
-            glNormal3f(x, 0, z);
+            glBegin(GL_TRIANGLE_STRIP);
+            for (int j = 0; j <= ladosTubo; j++)
+            {
+                float angTubo = j * 6.2831f / ladosTubo;
+                float c_tubo = cos(angTubo);
+                float s_tubo = sin(angTubo);
 
-            // Pared externa e interna de la costilla
-            // Usamos un radio de 1.0 (base) y un grosor pequeño
-            glVertex3f(x * 1.05f, 0.5f, z * 1.05f);
-            glVertex3f(x * 0.95f, -0.5f, z * 0.95f);
+                float R1 = 1.0f + radioTubo * c_tubo;
+                float x1 = sin(ang1) * R1;
+                float y1 = radioTubo * s_tubo;
+                float z1 = -cos(ang1) * R1;
+
+                float nx1 = sin(ang1) * c_tubo;
+                float ny1 = s_tubo;
+                float nz1 = -cos(ang1) * c_tubo;
+
+                glNormal3f(nx1, ny1, nz1);
+                glVertex3f(x1, y1, z1);
+
+                float R2 = 1.0f + radioTubo * c_tubo;
+                float x2 = sin(ang2) * R2;
+                float y2 = y1;
+                float z2 = -cos(ang2) * R2;
+
+                float nx2 = sin(ang2) * c_tubo;
+                float nz2 = -cos(ang2) * c_tubo;
+
+                glNormal3f(nx2, ny1, nz2);
+                glVertex3f(x2, y2, z2);
+            }
+            glEnd();
         }
-        glEnd();
         glPopMatrix();
     }
 }
