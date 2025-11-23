@@ -410,7 +410,6 @@ int main(void)
 
     if (!inicializarOpenGL()) { glfwTerminate(); return -1; }
 
-    // NOTA: Ya NO registramos callbacks de mouse
     glfwSetFramebufferSizeCallback(window, callbackCambioTamano);
 
     configurarProyeccion(ANCHO_VENTANA, ALTO_VENTANA);
