@@ -408,7 +408,7 @@ void dibujarCostillas()
     // --- 1. COLUMNA VERTEBRAL (SEGMENTADA) ---
     glPushMatrix();
     // Posicionamos la columna detrás de los pulmones
-    glTranslatef(0.0f, -0.5f, -2.0f);
+    glTranslatef(0.0f, -0.5f, -2.7f);
 
     int numVertebras = 18; // Cantidad de vértebras
     float alturaTotal = 5.0f;
@@ -446,7 +446,7 @@ void dibujarCostillas()
 
         // --- AJUSTE 2: FORMA DEL TÓRAX ---
         float ancho = 2.5f + sin(i * 0.35f) * 1.0f;
-        float profundidad = 2.0f;
+        float profundidad = 2.5f;
 
         // --- AJUSTE 3: ÁNGULO DE CAÍDA (ABANICO) ---
         // Fórmula Cuadrática: (i * i * 0.5f)
@@ -458,7 +458,7 @@ void dibujarCostillas()
         float anguloCaida = 10.0f + (i * i * 0.5f);
 
         // Límite del arco (Tu lógica anterior, mantenida)
-        int limiteArco = 29 - (i * 0.8);
+        int limiteArco = 29 - (i * 0.7);
 
         glPushMatrix();
         glTranslatef(0.0f, yPos, -0.3f);
