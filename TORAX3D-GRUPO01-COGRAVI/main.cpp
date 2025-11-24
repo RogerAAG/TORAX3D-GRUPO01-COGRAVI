@@ -26,22 +26,22 @@
 
  // --- CONSTANTES Y GLOBALES ---
 // Dimensiones de la Ventana
-const unsigned int ANCHO_VENTANA = 900;
-const unsigned int ALTO_VENTANA = 700;
+const unsigned int ANCHO_VENTANA = 800; // Ancho de la ventana
+const unsigned int ALTO_VENTANA = 600; // Alto de la ventana
 const float PI = 3.14159265f; // Constante matemática para cálculos
 // Variables de Cámara (Controlada por Teclado)
-float camYaw = 45.0f;
-float camPitch = 20.0f;
-float camDist = 10.0f;
+float camYaw = 45.0f; // Ángulo de rotación horizontal
+float camPitch = 20.0f; // Ángulo de rotación vertical
+float camDist = 10.0f; // Distancia de la cámara al origen
 // Variables de Estado y Animación
-float factorRespiracion = 1.0f;
-bool transPulmonIzq = false;
-bool transPulmonDer = false;
-bool mostrarCostillas = true;
+float factorRespiracion = 1.0f; // Factor de escala para simulación de respiración
+bool transPulmonIzq = false; // Transparencia del pulmón izquierdo
+bool transPulmonDer = false; // Transparencia del pulmón derecho
+bool mostrarCostillas = true; // Mostrar/Ocultar esqueleto
 // Control de rebote de teclas (Toggle)
-bool tecla1Presionada = false;
-bool tecla2Presionada = false;
-bool tecla3Presionada = false;
+bool tecla1Presionada = false; // Estado de la tecla 1
+bool tecla2Presionada = false; // Estado de la tecla 2
+bool tecla3Presionada = false; // Estado de la tecla 3
 // Texturas
 GLuint texturaPulmonID = 0; // ID de textura para los pulmones
 
