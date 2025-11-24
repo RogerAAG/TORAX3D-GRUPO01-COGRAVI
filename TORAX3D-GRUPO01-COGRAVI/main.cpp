@@ -1,601 +1,668 @@
-#include <iostream> // Se incluye libreria para manejo de entrada/salida
-#include <vector> // Se incluye libreria para manejo de vectores
-#include <cmath> // Se incluye libreria para funciones matematicas
-#include <GLFW/glfw3.h> 
-#define STB_IMAGE_IMPLEMENTATION // Definición para implementación de stb_image
-#include "include/stb_image.h" // Se incluye libreria para carga de imagenes
+//-------------------------------------------------------------------------------------------------------------------------------//
+// FACULTAD DE INGENIERÍA
+// CARRERA DE INGENIERÍA DE SISTEMAS COMPUTACIONALES
+// PROYECTO FINAL
+// --- VISUALIZADOR 3D INTERACTIVO DEL TÓRAX HUMANO ---
 
-// --- VARIABLES GLOBALES ---
-const unsigned int ANCHO_VENTANA = 800;
-const unsigned int ALTO_VENTANA = 600;
+// Autores:
+// ALDANA GARCIA, ROGER ALEXANDER
+// CHAVEZ AMBROSIO, JORGE JUNIOR
+// LAZARO VARGAS, STEVEN ISAAC
+// MOSCOSO TEMOCHE, DIANA TANEISHA
+// TUESTA HUAMAN, CHRISTIAN MARTIN
 
-// Cámara (Controlada ahora por Teclado)
+// Curso:
+// COMPUTACIÓN GRÁFICA Y VISUAL
+
+// Docente del Curso :
+// ROMERO UNTIVEROS, LUIS ALFREDO
+//-------------------------------------------------------------------------------------------------------------------------------//
+#include <iostream> //Se incluye la librería para manejo de entrada y salida
+#include <vector> //Se incluye la librería para manejo de vectores
+#include <cmath> //Se incluye la librería para funciones matemáticas
+#include <GLFW/glfw3.h> //Se incluye la librería para manejo de ventanas y OpenGL
+#define STB_IMAGE_IMPLEMENTATION //Definición para la implementación de la librería stb_image
+#include "include/stb_image.h" //Se incluye la librería para carga de imágenes
+
+ // --- CONSTANTES Y GLOBALES ---
+// Dimensiones de la Ventana
+const unsigned int ANCHO_VENTANA = 900;
+const unsigned int ALTO_VENTANA = 700;
+const float PI = 3.14159265f; // Constante matemática para cálculos
+// Variables de Cámara (Controlada por Teclado)
 float camYaw = 45.0f;
 float camPitch = 20.0f;
 float camDist = 10.0f;
-
-// Animación Respiración
+// Variables de Estado y Animación
 float factorRespiracion = 1.0f;
-
-// ESTADO: Transparencia
 bool transPulmonIzq = false;
 bool transPulmonDer = false;
-// Visibilidad de Costillas
 bool mostrarCostillas = true;
-bool tecla3Presionada = false;
-// Control de teclas (rebote)
+// Control de rebote de teclas (Toggle)
 bool tecla1Presionada = false;
 bool tecla2Presionada = false;
+bool tecla3Presionada = false;
+// Texturas
+GLuint texturaPulmonID = 0; // ID de textura para los pulmones
 
-// Textura
-GLuint texturaPulmonID = 0;
-
-// --- CARGA DE TEXTURAS ---
+// --- GESTIÓN DE RECURSOS (TEXTURAS) ---
+// Función para cargar una textura desde archivo
 bool cargarTextura(const char* ruta)
 {
-	// Cargar imagen usando stb_image
     int ancho, alto, canales;
+    // Cargar imagen usando librería externa
     unsigned char* data = stbi_load(ruta, &ancho, &alto, &canales, 0);
+	// Verificar carga correcta
     if (!data)
     {
-        std::cerr << "Error al cargar la imagen: " << ruta << "\n";
+        std::cerr << "ERROR::TEXTURA::No se pudo cargar: " << ruta << "\n";
         return false;
     }
-	// Crear textura OpenGL
-    glGenTextures(1, &texturaPulmonID);
-    glBindTexture(GL_TEXTURE_2D, texturaPulmonID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	// imagen cargada en OpenGL
-    GLenum formato = (canales == 4) ? GL_RGBA : GL_RGB;
-    glTexImage2D(GL_TEXTURE_2D, 0, formato, ancho, alto, 0, formato, GL_UNSIGNED_BYTE, data);
-	// Liberar memoria de la imagen cargada
-    stbi_image_free(data);
+
+    // Generar y configurar textura OpenGL
+	glGenTextures(1, &texturaPulmonID);// Generar ID de textura
+	glBindTexture(GL_TEXTURE_2D, texturaPulmonID);// Enlazar textura
+    // Configurar filtrado y repetición
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);// Filtrado lineal
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);// Filtrado lineal
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);// Repetición en S
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);// Repetición en T
+    // Cargar datos a la GPU
+	GLenum formato = (canales == 4) ? GL_RGBA : GL_RGB; // Determinar formato
+	glTexImage2D(GL_TEXTURE_2D, 0, formato, ancho, alto, 0, formato, GL_UNSIGNED_BYTE, data); // Cargar datos
+	// Liberar datos de la imagen
+    stbi_image_free(data); // Liberar memoria RAM
     return true;
 }
 
-// --- CONFIGURACIÓN OPENGL ---
+// --- CONFIGURACIÓN INICIAL DE OPENGL ---
+// Función para inicializar OpenGL y cargar recursos
 bool inicializarOpenGL()
 {
-	// Configuraciones básicas
-	glEnable(GL_DEPTH_TEST);// Habilitar prueba de profundidad
-	glEnable(GL_LIGHTING);// Habilitar iluminación
-	glEnable(GL_LIGHT0);// Habilitar luz 0
-	glEnable(GL_COLOR_MATERIAL);// Habilitar material por color
-	glEnable(GL_NORMALIZE);// Habilitar normalización de normales
-	glEnable(GL_BLEND);// Habilitar blending para transparencia
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);// Función de mezcla para transparencia
-    
-	glClearColor(0.05f, 0.05f, 0.08f, 1.0f);// Color de fondo
+    /* Configuración de capacidades */
+    glEnable(GL_DEPTH_TEST);     // Z-Buffer para profundidad correcta
+    glEnable(GL_LIGHTING);       // Sistema de iluminación
+    glEnable(GL_LIGHT0);         // Luz principal
+    glEnable(GL_COLOR_MATERIAL); // Materiales responden a glColor
+    glEnable(GL_NORMALIZE);      // Normalizar vectores para luces correctas
+    glEnable(GL_BLEND);          // Transparencia
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Función de mezcla alfa
 
-    // Luces
-	GLfloat posicionLuz[] = { 4.0f, 6.0f, 5.0f, 1.0f };// Posición de la luz
-	glLightfv(GL_LIGHT0, GL_POSITION, posicionLuz);// Establecer posición de la luz
-	// Componentes de la luz
-	GLfloat luzAmbiente[] = { 0.3f, 0.3f, 0.3f, 1.0f };// Componente ambiental
-	GLfloat luzDifusa[] = { 0.9f, 0.9f, 0.9f, 1.0f };// Componente difusa
-	GLfloat luzEspecular[] = { 0.3f, 0.3f, 0.3f, 1.0f };// Componente especular
-	// Configurar luz 0
-	glLightfv(GL_LIGHT0, GL_AMBIENT, luzAmbiente);// Establecer componente ambiental
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, luzDifusa);// Establecer componente difusa
-	glLightfv(GL_LIGHT0, GL_SPECULAR, luzEspecular);// Establecer componente especular
-	// Materiales
-	GLfloat matEspecular[] = { 0.4f, 0.4f, 0.4f, 1.0f };// Componente especular del material
-	GLfloat shininess[] = { 32.0f };// Brillo del material
-	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, matEspecular);// Establecer componente especular del material
-	glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, shininess);// Establecer brillo del material
-	glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);// Configurar material por color
-	// Cargar textura
+    glClearColor(0.05f, 0.05f, 0.08f, 1.0f); // Fondo Gris Oscuro
+
+    /* Configuración de Iluminación */
+	GLfloat posicionLuz[] = { 4.0f, 6.0f, 5.0f, 1.0f }; // Posición de la luz
+	glLightfv(GL_LIGHT0, GL_POSITION, posicionLuz); // Posición de la luz
+
+	GLfloat luzAmbiente[] = { 0.3f, 0.3f, 0.3f, 1.0f }; // Luz ambiental
+	GLfloat luzDifusa[] = { 0.9f, 0.9f, 0.9f, 1.0f }; // Luz difusa
+	GLfloat luzEspecular[] = { 0.3f, 0.3f, 0.3f, 1.0f }; // Luz especular
+
+	glLightfv(GL_LIGHT0, GL_AMBIENT, luzAmbiente); // Configuración de luz ambiental
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, luzDifusa); // Configuración de luz difusa
+	glLightfv(GL_LIGHT0, GL_SPECULAR, luzEspecular); // Configuración de luz especular
+
+    /* Configuración de Materiales */
+	GLfloat matEspecular[] = { 0.4f, 0.4f, 0.4f, 1.0f }; // Material especular
+	GLfloat shininess[] = { 32.0f }; // Brillo del material
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, matEspecular); // Configuración de material especular
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, shininess); // Configuración de brillo
+	glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE); // Material responde a color ambiente y difuso
+
+    /* Carga de Recursos */
     stbi_set_flip_vertically_on_load(true);
+	// Cargar textura de los pulmones
     if (!cargarTextura("textures/pulmon1.jpg"))
     {
         return false;
     }
-	return true;// Éxito
+	// Éxito
+    return true;
 }
 
-// --- PROYECCIÓN ---
+// --- SISTEMA DE CÁMARA Y PROYECCIÓN ---
+// Función para configurar la proyección y viewport
 void configurarProyeccion(int ancho, int alto)
 {
-	// Evitar división por cero
-	if (alto == 0) alto = 1;// Prevenir división por cero
-    glViewport(0, 0, ancho, alto);//
+    if (alto == 0) alto = 1; // Prevenir división por cero
+    
+	glViewport(0, 0, ancho, alto);// Configurar viewport
 	glMatrixMode(GL_PROJECTION);// Seleccionar matriz de proyección
-	glLoadIdentity();// Cargar matriz identidad
-	// Configurar proyección en perspectiva
-	float aspect = (float)ancho / (float)alto;// Aspect ratio
-	float fovY = 45.0f;// Campo de visión vertical
-	float nearPlane = 0.1f;// Plano cercano
-	float farPlane = 100.0f;// Plano lejano
-	// Cálculo de los parámetros del frustum
-	float top = nearPlane * tanf(fovY * 3.14159265f / 360.0f);// Cálculo de top
-	float bottom = -top;// Cálculo de bottom
-	float right = top * aspect;// Cálculo de right
-	float left = -right;// Cálculo de left
-	// Aplicar frustum
-	glFrustum(left, right, bottom, top, nearPlane, farPlane);// Configurar frustum
-	glMatrixMode(GL_MODELVIEW);// Seleccionar matriz de modelo-vista
-	glLoadIdentity();// Cargar matriz identidad
+	glLoadIdentity();// Resetear matriz
+
+    // Configuración manual del Frustum (Perspectiva)
+	float aspect = (float)ancho / (float)alto; // Relación de aspecto
+	float fovY = 45.0f; // Campo de visión vertical
+	float nearPlane = 0.1f; // Plano cercano
+	float farPlane = 100.0f; // Plano lejano
+	// Cálculo de los límites del frustum
+	float top = nearPlane * tanf(fovY * PI / 360.0f); // Mitad altura en el plano cercano
+	float bottom = -top; // Mitad inferior
+	float right = top * aspect; // Mitad derecha
+	float left = -right; // Mitad izquierda
+	// Configurar frustum
+    glFrustum(left, right, bottom, top, nearPlane, farPlane);
+
+	glMatrixMode(GL_MODELVIEW); // Volver a modelo-vista
+	glLoadIdentity(); // Resetear matriz
 }
 
-// --- INPUT (TECLADO) ---
+// Función para posicionar la cámara
 void callbackCambioTamano(GLFWwindow* ventana, int ancho, int alto)
 {
-	configurarProyeccion(ancho, alto);// Reconfigurar proyección al cambiar tamaño
+	configurarProyeccion(ancho, alto); // Reconfigurar proyección
 }
-// Procesar entrada del teclado
+
+// --- PROCESAMIENTO DE ENTRADA (INPUT) ---
+// Función para procesar la entrada del usuario
 void procesarEntrada(GLFWwindow* ventana)
 {
-    // SALIR
+    // Salir de la aplicación
     if (glfwGetKey(ventana, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(ventana, true);
 
-    // --- CONTROL DE CÁMARA (FLECHAS) ---
-    float velRotacion = 0.03f; // Velocidad de giro
-    float velZoom = 0.01f;     // Velocidad de zoom
+    /* Control de Cámara (Flechas y W/S) */
+    float velRotacion = 0.1f; // Velocidad ajustada
+	float velZoom = 0.03f; // Velocidad de zoom
 
-    // Rotación Y (Izquierda / Derecha)
-	if (glfwGetKey(ventana, GLFW_KEY_RIGHT) == GLFW_PRESS) camYaw += velRotacion; // Girar a la derecha
-	if (glfwGetKey(ventana, GLFW_KEY_LEFT) == GLFW_PRESS) camYaw -= velRotacion; // Girar a la izquierda
+    // Rotación
+	if (glfwGetKey(ventana, GLFW_KEY_RIGHT) == GLFW_PRESS) camYaw += velRotacion; // Rotar derecha
+	if (glfwGetKey(ventana, GLFW_KEY_LEFT) == GLFW_PRESS)  camYaw -= velRotacion; // Rotar izquierda
+	if (glfwGetKey(ventana, GLFW_KEY_UP) == GLFW_PRESS)    camPitch -= velRotacion; // Rotar arriba
+	if (glfwGetKey(ventana, GLFW_KEY_DOWN) == GLFW_PRESS)  camPitch += velRotacion; // Rotar abajo
 
-    // Rotación X (Arriba / Abajo)
-	if (glfwGetKey(ventana, GLFW_KEY_UP) == GLFW_PRESS) camPitch -= velRotacion; // Girar hacia arriba
-	if (glfwGetKey(ventana, GLFW_KEY_DOWN) == GLFW_PRESS) camPitch += velRotacion; // Girar hacia abajo
+    // Limitar rotación vertical
+	if (camPitch > 89.0f) camPitch = 89.0f; // Limite superior
+	if (camPitch < -89.0f) camPitch = -89.0f; // Limite inferior
 
-    // Limitar ángulo vertical para no dar la vuelta completa
-	if (camPitch > 89.0f) camPitch = 89.0f;// Limitar ángulo máximo
-	if (camPitch < -89.0f) camPitch = -89.0f;// Limitar ángulo mínimo
-
-    // ZOOM (Teclas W y S)
+    // Zoom
 	if (glfwGetKey(ventana, GLFW_KEY_W) == GLFW_PRESS) camDist -= velZoom; // Acercar
-	if (glfwGetKey(ventana, GLFW_KEY_S) == GLFW_PRESS) camDist += velZoom;// Alejar
+	if (glfwGetKey(ventana, GLFW_KEY_S) == GLFW_PRESS) camDist += velZoom; // Alejar
 
     // Limitar Zoom
-	if (camDist < 5.0f)  camDist = 5.0f;// Distancia mínima
-	if (camDist > 25.0f) camDist = 25.0f;// Distancia máxima
+	if (camDist < 5.0f)  camDist = 5.0f; // Limite cercano
+	if (camDist > 25.0f) camDist = 25.0f;  // Limite lejano
 
-
-    // --- CONTROL DE MODELO (TRANSPARENCIA) ---
-    // TECLA 1: Transparencia Izquierda
-    if (glfwGetKey(ventana, GLFW_KEY_1) == GLFW_PRESS) {
-        if (!tecla1Presionada) {
-            transPulmonIzq = !transPulmonIzq;
-            tecla1Presionada = true;
+    /* Control de Interactividad (Teclas 1, 2, 3) */
+    // Tecla 1: Transparencia Izquierda
+    if (glfwGetKey(ventana, GLFW_KEY_1) == GLFW_PRESS) 
+    {
+		// Verificar rebote de tecla
+        if (!tecla1Presionada) 
+        {
+			transPulmonIzq = !transPulmonIzq;// Alternar transparencia
+			tecla1Presionada = true;// Marcar como presionada
         }
     }
-    else tecla1Presionada = false;
+	else tecla1Presionada = false; // Resetear estado de tecla
 
-    // TECLA 2: Transparencia Derecha
-    if (glfwGetKey(ventana, GLFW_KEY_2) == GLFW_PRESS) {
-        if (!tecla2Presionada) {
-            transPulmonDer = !transPulmonDer;
-            tecla2Presionada = true;
+    // Tecla 2: Transparencia Derecha
+    if (glfwGetKey(ventana, GLFW_KEY_2) == GLFW_PRESS) 
+    {
+        if (!tecla2Presionada) 
+        {
+			transPulmonDer = !transPulmonDer; // Alternar transparencia
+			tecla2Presionada = true; // Marcar como presionada
         }
     }
-    else tecla2Presionada = false;
+	else tecla2Presionada = false; // Resetear estado de tecla
 
-    // TECLA 3: Mostrar/Ocultar Costillas
-    if (glfwGetKey(ventana, GLFW_KEY_3) == GLFW_PRESS) {
-        if (!tecla3Presionada) {
-            mostrarCostillas = !mostrarCostillas;
-            tecla3Presionada = true;
+    // Tecla 3: Mostrar/Ocultar Esqueleto
+    if (glfwGetKey(ventana, GLFW_KEY_3) == GLFW_PRESS) 
+    {
+        if (!tecla3Presionada) 
+        {
+			mostrarCostillas = !mostrarCostillas; // Alternar visibilidad
+			tecla3Presionada = true; // Marcar como presionada
         }
     }
-    else tecla3Presionada = false;
+	else tecla3Presionada = false; // Resetear estado de tecla
 }
 
-// --- GEOMETRÍA ---
+// --- FUNCIONES DE GEOMETRÍA (MODELADO) ---
+// Primitiva: Cilindro con deformación sinusoidal (Anillos) para representar la traquea.
 void dibujarCilindroConAros(float radioBase, float alto, int slices, int stacks, int numAros, float amplitud)
 {
-	// Ajustar para cilindro invertido
-	float longitud = std::fabs(alto);// Longitud del cilindro
-	float signo = (alto >= 0.0f) ? 1.0f : -1.0f;// Signo para dirección
-	// Dibujar cilindro con anillos
+	// Ajustar longitud y dirección
+    float longitud = std::fabs(alto);
+    float signo = (alto >= 0.0f) ? 1.0f : -1.0f;
+	// Construcción del cilindro con anillos
     for (int i = 0; i < stacks; ++i)
     {
-        
-		float t0 = (float)i / stacks; float t1 = (float)(i + 1) / stacks;// Parámetros de interpolación
-		float y0 = signo * t0 * longitud; float y1 = signo * t1 * longitud;// Coordenadas Y
-		float fase0 = t0 * (float)numAros * 6.2831f; float fase1 = t1 * (float)numAros * 6.2831f;// Fases para oscilación
-		float r0 = radioBase * (1.0f + amplitud * sinf(fase0));// Radio con oscilación
-		float r1 = radioBase * (1.0f + amplitud * sinf(fase1));// Radio con oscilación
+		float t0 = (float)i / stacks; // Parámetro de altura
+		float t1 = (float)(i + 1) / stacks; // Parámetro de altura siguiente
+		float y0 = signo * t0 * longitud; // Altura actual
+		float y1 = signo * t1 * longitud; // Altura siguiente
+
+        // Cálculo de ondas para los anillos cartilaginosos
+		float fase0 = t0 * (float)numAros * 2.0f * PI; // Fase de la onda en y0
+		float fase1 = t1 * (float)numAros * 2.0f * PI; // Fase de la onda en y1
+		float r0 = radioBase * (1.0f + amplitud * sinf(fase0)); // Radio deformado en y0
+		float r1 = radioBase * (1.0f + amplitud * sinf(fase1)); // Radio deformado en y1
 		// Dibujar segmento del cilindro
         glBegin(GL_TRIANGLE_STRIP);
-        for (int j = 0; j <= slices; ++j) {
-            float s = (float)j / slices; float ang = s * 6.2831f;
-            float cx = cosf(ang); float cz = sinf(ang);
-            glNormal3f(cx, 0.0f, cz); glVertex3f(r0 * cx, y0, r0 * cz);
-            glNormal3f(cx, 0.0f, cz); glVertex3f(r1 * cx, y1, r1 * cz);
+		// Iterar sobre los slices
+        for (int j = 0; j <= slices; ++j) 
+        {
+			float s = (float)j / slices;    // Parámetro angular
+			float ang = s * 2.0f * PI;  // Ángulo actual
+			float cx = cosf(ang);   // Componente X
+			float cz = sinf(ang);   // Componente Z
+
+			glNormal3f(cx, 0.0f, cz);   // Normal en y0
+			glVertex3f(r0 * cx, y0, r0 * cz);   // Vértice en y0
+
+			glNormal3f(cx, 0.0f, cz);   // Normal en y1
+			glVertex3f(r1 * cx, y1, r1 * cz);   // Vértice en y1
         }
-        glEnd();
+		glEnd(); // Finalizar segmento
     }
 }
-// Dibujar esfera para unión
+
+// Primitiva: Esfera (Usada para la Carina)
 void dibujarEsferaUnion(float radio)
 {
+	// Construcción de la esfera usando quad strips
     int lats = 20; int longs = 20;
-    for (int i = 0; i <= lats; i++) {
-        float lat0 = 3.14159f * (-0.5f + (float)(i - 1) / lats);
-        float z0 = sin(lat0); float zr0 = cos(lat0);
-        float lat1 = 3.14159f * (-0.5f + (float)i / lats);
-        float z1 = sin(lat1); float zr1 = cos(lat1);
-
+	// Iterar sobre latitudes
+    for (int i = 0; i <= lats; i++) 
+    {
+		float lat0 = PI * (-0.5f + (float)(i - 1) / lats);  // Latitud inicial
+		float z0 = sin(lat0); float zr0 = cos(lat0);    // Coordenadas Z y radio en latitud
+		float lat1 = PI * (-0.5f + (float)i / lats);    // Latitud siguiente
+		float z1 = sin(lat1); float zr1 = cos(lat1);    // Coordenadas Z y radio en latitud siguiente
+		// Iterar sobre longitudes
         glBegin(GL_QUAD_STRIP);
-        for (int j = 0; j <= longs; j++) {
-            float lng = 2 * 3.14159f * (float)(j - 1) / longs;
-            float x = cos(lng); float y = sin(lng);
-            glNormal3f(x * zr0, y * zr0, z0); glVertex3f(radio * x * zr0, radio * y * zr0, radio * z0);
-            glNormal3f(x * zr1, y * zr1, z1); glVertex3f(radio * x * zr1, radio * y * zr1, radio * z1);
+        for (int j = 0; j <= longs; j++) 
+        {
+			float lng = 2 * PI * (float)(j - 1) / longs; // Longitud actual
+			float x = cos(lng); float y = sin(lng); // Coordenadas X e Y
+			// Vértices y normales
+			glNormal3f(x * zr0, y * zr0, z0); // Normal en lat0
+			glVertex3f(radio * x * zr0, radio * y * zr0, radio * z0); // Vértice en lat0
+			glNormal3f(x * zr1, y * zr1, z1); // Normal en lat1
+			glVertex3f(radio * x * zr1, radio * y * zr1, radio * z1); // Vértice en lat1
         }
-        glEnd();
+		glEnd(); // Finalizar quad strip
     }
 }
 
+// Primitiva: Rama Fractal (Bronquiolos)
 void dibujarRama(float largo, float radio, int nivel)
 {
-    if (nivel == 0) return;
-    int lados = 8 + nivel * 2;
-    float pasoAngulo = 6.2831f / lados;
-
+	if (nivel == 0) return; // Caso base de la recursión
+	int lados = 8 + nivel * 2; // Más lados para niveles superiores
+	float pasoAngulo = 2.0f * PI / lados; // Paso angular
+	// Cuerpo de la rama
     glBegin(GL_TRIANGLE_STRIP);
-    for (int i = 0; i <= lados; i++) {
-        float ang = i * pasoAngulo;
-        float x = cos(ang); float z = sin(ang);
-        glNormal3f(x, 0.0f, z);
-        glVertex3f(x * radio, 0.0f, z * radio);
-        glVertex3f(x * radio * 0.7f, -largo, z * radio * 0.7f);
+	// Dibujar cilindro
+    for (int i = 0; i <= lados; i++) 
+    {
+		float ang = i * pasoAngulo; // Ángulo actual
+		float x = cos(ang); float z = sin(ang); // Coordenadas X y Z
+		glNormal3f(x, 0.0f, z); // Normal
+		glVertex3f(x * radio, 0.0f, z * radio); // Vértice inferior
+		glVertex3f(x * radio * 0.7f, -largo, z * radio * 0.7f); // Vértice superior
     }
-    glEnd();
+	glEnd(); // Finalizar cilindro
+	// Mover al extremo superior de la rama
     glTranslatef(0.0f, -largo, 0.0f);
+	// Escalas para sub-ramas
+	float escalaLargo = 0.75f; // Escala de largo
+	float escalaRadio = 0.65f; // Escala de radio
 
-    float escalaLargo = 0.75f; float escalaRadio = 0.65f;
-    glPushMatrix();
-    glRotatef(35.0f + (nivel * 5.0f), 0.0f, 0.0f, 1.0f);
-    glRotatef(20.0f, 0.0f, 1.0f, 0.0f);
-    dibujarRama(largo * escalaLargo, radio * escalaRadio, nivel - 1);
-    glPopMatrix();
+    // Sub-rama Izquierda
+	glPushMatrix(); // Guardar estado
+	glRotatef(35.0f + (nivel * 5.0f), 0.0f, 0.0f, 1.0f); // Rotar para izquierda
+	glRotatef(20.0f, 0.0f, 1.0f, 0.0f); // Rotar hacia afuera
+	dibujarRama(largo * escalaLargo, radio * escalaRadio, nivel - 1); // Llamada recursiva
+	glPopMatrix(); // Restaurar estado
 
-    glPushMatrix();
-    glRotatef(-30.0f - (nivel * 5.0f), 0.0f, 0.0f, 1.0f);
-    glRotatef(-15.0f, 1.0f, 0.0f, 0.0f);
-    dibujarRama(largo * escalaLargo, radio * escalaRadio, nivel - 1);
-    glPopMatrix();
+    // Sub-rama Derecha
+	glPushMatrix(); // Guardar estado
+	glRotatef(-30.0f - (nivel * 5.0f), 0.0f, 0.0f, 1.0f); // Rotar para derecha
+	glRotatef(-15.0f, 1.0f, 0.0f, 0.0f); // Rotar hacia afuera
+	dibujarRama(largo * escalaLargo, radio * escalaRadio, nivel - 1); // Llamada recursiva
+	glPopMatrix(); // Restaurar estado
 }
 
+// Modelo: Sistema Traqueal
 void dibujarTraqueaYBronquios()
 {
-    glColor4f(0.95f, 0.85f, 0.85f, 1.0f);
+    glColor4f(0.95f, 0.85f, 0.85f, 1.0f); // Color hueso/cartílago
+    // Traquea Principal
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, 1.8f, 0.0f); // Posicionar al inicio de la traquea
+	dibujarCilindroConAros(0.26f, -2.3f, 20, 32, 12, 0.12f); // Dibujar traquea
+	glPopMatrix(); // Restaurar estado
 
-    // Traquea
-    glPushMatrix();
-    glTranslatef(0.0f, 1.8f, 0.0f);
-    dibujarCilindroConAros(0.26f, -2.3f, 20, 32, 12, 0.12f);
-    glPopMatrix();
+    // Carina (Unión)
+	float yBifurcacion = -0.4f; // Altura de la bifurcación
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, yBifurcacion, 0.0f); // Posicionar en la bifurcación
+	glScalef(1.0f, 0.8f, 1.0f); // Escalar ligeramente en Y
+	dibujarEsferaUnion(0.28f); // Dibujar esfera de unión
+	glPopMatrix(); // Restaurar estado
+	// Inicio de los Bronquios
+	float yInicioBronquios = yBifurcacion + 0.15f; // Altura de inicio de bronquios
 
-    float yBifurcacion = -0.4f;
-    glPushMatrix();
-    glTranslatef(0.0f, yBifurcacion, 0.0f);
-    glScalef(1.0f, 0.8f, 1.0f);
-    dibujarEsferaUnion(0.28f);
-    glPopMatrix();
+    // Bronquio y Árbol Izquierdo
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, yInicioBronquios, 0.0f); // Posicionar al inicio del bronquio
+	glRotatef(-40.0f, 0.0f, 0.0f, 1.0f); // Rotar hacia la izquierda
+	dibujarCilindroConAros(0.16f, -1.8f, 18, 20, 8, 0.10f); // Dibujar bronquio
+	// Árbol de Bronquiolos Izquierdo
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, -1.8f, 0.0f); // Posicionar al final del bronquio
+	dibujarRama(0.8f, 0.12f, 3); // Dibujar rama fractal
+	glPopMatrix(); // Restaurar estado izquierdo
+	glPopMatrix(); // Restaurar estado derecho
 
-    float yInicioBronquios = yBifurcacion + 0.15f;
-
-    // Izquierdo
-    glPushMatrix();
-    glTranslatef(0.0f, yInicioBronquios, 0.0f);
-    glRotatef(-40.0f, 0.0f, 0.0f, 1.0f);
-    dibujarCilindroConAros(0.16f, -1.8f, 18, 20, 8, 0.10f);
-    glPushMatrix();
-    glTranslatef(0.0f, -1.8f, 0.0f);
-    dibujarRama(0.8f, 0.12f, 3);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Derecho
-    glPushMatrix();
-    glTranslatef(0.0f, yInicioBronquios, 0.0f);
-    glRotatef(40.0f, 0.0f, 0.0f, 1.0f);
-    dibujarCilindroConAros(0.16f, -1.8f, 18, 20, 8, 0.10f);
-    glPushMatrix();
-    glTranslatef(0.0f, -1.8f, 0.0f);
-    dibujarRama(0.8f, 0.12f, 3);
-    glPopMatrix();
-    glPopMatrix();
+    // Bronquio y Árbol Derecho
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, yInicioBronquios, 0.0f); // Posicionar al inicio del bronquio
+	glRotatef(40.0f, 0.0f, 0.0f, 1.0f); // Rotar hacia la derecha
+	dibujarCilindroConAros(0.16f, -1.8f, 18, 20, 8, 0.10f); // Dibujar bronquio
+	// Árbol de Bronquiolos Derecho
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, -1.8f, 0.0f); // Posicionar al final del bronquio
+	dibujarRama(0.8f, 0.12f, 3); // Dibujar rama fractal
+	glPopMatrix(); // Restaurar estado derecho
+	glPopMatrix(); // Restaurar estado izquierdo
 }
 
+// Matemática: Perfil de la forma del pulmón
 float perfilRadioPulmon(float t)
 {
-    if (t > 0.98f) return 0.0f;
-    float curva = std::pow(std::sin(t * 3.14159f), 0.5f);
-    float estrechamiento = 1.0f - (t * 0.55f);
-    float radioFinal = 1.1f * curva * estrechamiento;
-    if (t < 0.1f) radioFinal *= (t * 10.0f);
-    return radioFinal;
+    if (t > 0.98f) return 0.0f; // Cerrar punta superior
+	float curva = std::pow(std::sin(t * PI), 0.5f); // Curva base
+	float estrechamiento = 1.0f - (t * 0.55f); // Estrechamiento inferior
+	float radioFinal = 1.1f * curva * estrechamiento; // Radio final
+    if (t < 0.1f) radioFinal *= (t * 10.0f); // Suavizar base
+	return radioFinal; // Retornar radio
 }
 
+// Modelo: Malla del Pulmón
 void dibujarPulmonMalla(bool izquierdo)
 {
-    int stacks = 40; int slices = 40;
-    float yMin = -1.6f; float yMax = 1.6f;
-    float h = yMax - yMin;
+	int stacks = 40; int slices = 40; // Resolución de la malla
+	float yMin = -1.6f; float yMax = 1.6f; // Alturas
+	float h = yMax - yMin; // Altura total
 
-    float escalaX = 1.20f * factorRespiracion;
-    float escalaZ = 1.25f * factorRespiracion;
-
+    // Animación de respiración
+	float escalaX = 1.20f * factorRespiracion; // Escala en X
+	float escalaZ = 1.25f * factorRespiracion; // Escala en Z
+	// Construcción de la malla
     for (int i = 0; i < stacks; ++i)
-    {
-        float t0 = (float)i / stacks; float t1 = (float)(i + 1) / stacks;
-        float y0 = yMin + t0 * h; float y1 = yMin + t1 * h;
-        float r0Base = perfilRadioPulmon(t0); float r1Base = perfilRadioPulmon(t1);
+    { 
+		// Alturas y radios en los niveles actuales
+		float t0 = (float)i / stacks; // Parámetro de altura
+		float t1 = (float)(i + 1) / stacks; // Parámetro de altura siguiente
+		float y0 = yMin + t0 * h; // Altura en t0
+		float y1 = yMin + t1 * h; // Altura en t1
+		float r0Base = perfilRadioPulmon(t0); // Radio base en t0
+		float r1Base = perfilRadioPulmon(t1); // Radio base en t1
 
-        float fuerza0 = (1.0f - t0) * (1.0f - t0);
-        float fuerza1 = (1.0f - t1) * (1.0f - t1);
-        float dir = izquierdo ? -1.0f : 1.0f;
-        float off0 = fuerza0 * dir * 0.6f * factorRespiracion;
-        float off1 = fuerza1 * dir * 0.6f * factorRespiracion;
-
+        // Deformación inferior (picos)
+		float fuerza0 = (1.0f - t0) * (1.0f - t0); // Fuerza de deformación en t0
+		float fuerza1 = (1.0f - t1) * (1.0f - t1); // Fuerza de deformación en t1
+		float dir = izquierdo ? -1.0f : 1.0f; // Dirección según pulmón
+		float off0 = fuerza0 * dir * 0.6f * factorRespiracion; // Offset en t0
+		float off1 = fuerza1 * dir * 0.6f * factorRespiracion; // Offset en t1
+		// Dibujar segmento de la malla
         glBegin(GL_TRIANGLE_STRIP);
-        for (int j = 0; j <= slices; ++j) {
-            float s = (float)j / slices; float ang = s * 6.2831f;
-            float c = cosf(ang); float si = sinf(ang);
+        for (int j = 0; j <= slices; ++j)
+        {
+			// Cálculo de posición angular
+			float s = (float)j / slices; // Parámetro angular
+			float ang = s * 2.0f * PI; // Ángulo actual
+			float c = cosf(ang); // Componente coseno
+			float si = sinf(ang); // Componente seno
 
-            float n0 = 1.0f; float n1 = 1.0f;
-            if (izquierdo && c < -0.15f) { float k = (c + 0.15f) / -0.85f; n0 = n1 = 1.0f - 0.35f * k; }
-            else if (!izquierdo && c > 0.25f) { float k = (c - 0.25f) / 0.75f; n0 = n1 = 1.0f - 0.22f * k; }
+            // Incisura Cardiaca
+			float n0 = 1.0f, n1 = 1.0f; // Factores de normalización
+			if (izquierdo && c < -0.15f) // Ajuste para pulmón izquierdo
+            {
+				float k = (c + 0.15f) / -0.85f; n0 = n1 = 1.0f - 0.35f * k; // Ajuste más pronunciado
+            }
+            else if (!izquierdo && c > 0.25f) 
+            {
+				float k = (c - 0.25f) / 0.75f; n0 = n1 = 1.0f - 0.22f * k; // Ajuste menos pronunciado
+            }
+			// Cálculo de posiciones finales
+			float r0 = r0Base * n0; // Radio ajustado en t0
+			float r1 = r1Base * n1; // Radio ajustado en t1
+			// Coordenadas X y Z
+			float x0 = (escalaX * r0 * c) + off0; // X en t0
+			float z0 = escalaZ * r0 * si; // Z en t0
+			float x1 = (escalaX * r1 * c) + off1; // X en t1
+			float z1 = escalaZ * r1 * si; // Z en t1
 
-            float r0 = r0Base * n0; float r1 = r1Base * n1;
-            float x0 = (escalaX * r0 * c) + off0; float z0 = escalaZ * r0 * si;
-            float x1 = (escalaX * r1 * c) + off1; float z1 = escalaZ * r1 * si;
-
+            // Cálculo de normales para iluminación
             float nx0 = 0, ny0 = 1, nz0 = 0, nx1 = 0, ny1 = 1, nz1 = 0;
-            if (t0 <= 0.95f) { float l = sqrt(x0 * x0 + y0 * y0 * 0.3f + z0 * z0); if (l < 0.001f)l = 1; nx0 = x0 / l; ny0 = y0 * 0.6f / l; nz0 = z0 / l; }
-            if (t1 <= 0.95f) { float l = sqrt(x1 * x1 + y1 * y1 * 0.3f + z1 * z1); if (l < 0.001f)l = 1; nx1 = x1 / l; ny1 = y1 * 0.6f / l; nz1 = z1 / l; }
+            if (t0 <= 0.95f) 
+            {
+				float l = sqrt(x0 * x0 + y0 * y0 * 0.3f + z0 * z0); if (l < 0.001f)l = 1; // Evitar división por cero
+				nx0 = x0 / l; ny0 = y0 * 0.6f / l; nz0 = z0 / l; // Normal en t0
+            }
+            if (t1 <= 0.95f) 
+            {
+				float l = sqrt(x1 * x1 + y1 * y1 * 0.3f + z1 * z1); if (l < 0.001f)l = 1; // Evitar división por cero
+				nx1 = x1 / l; ny1 = y1 * 0.6f / l; nz1 = z1 / l; // Normal en t1
+            }
 
-            glNormal3f(nx0, ny0, nz0); glTexCoord2f(s, t0); glVertex3f(x0, y0, z0);
-            glNormal3f(nx1, ny1, nz1); glTexCoord2f(s, t1); glVertex3f(x1, y1, z1);
+			glNormal3f(nx0, ny0, nz0); glTexCoord2f(s, t0); glVertex3f(x0, y0, z0); // Vértice en t0
+			glNormal3f(nx1, ny1, nz1); glTexCoord2f(s, t1); glVertex3f(x1, y1, z1); // Vértice en t1
         }
-        glEnd();
+		glEnd(); // Finalizar segmento
     }
 }
 
+// Primitiva: Vértebra Individual
 void dibujarVertebra(float radio, float altura)
 {
-    // 1. CUERPO (Cilindro principal)
+	// Cuerpo Vertebral
     int lados = 12;
+    // Cuerpo
     glBegin(GL_TRIANGLE_STRIP);
-    for (int i = 0; i <= lados; i++) {
-        float a = i * 6.2831f / lados;
-        float x = cos(a); float z = sin(a);
-
-        // Normales suavizadas para que parezca hueso redondo
-        glNormal3f(x, 0, z);
-        glVertex3f(x * radio, altura / 2, z * radio);
-        glVertex3f(x * radio, -altura / 2, z * radio);
+	// Dibujar cilindro
+    for (int i = 0; i <= lados; i++) 
+    {
+		float a = i * 2.0f * PI / lados; // Ángulo actual
+		float x = cos(a); float z = sin(a); // Coordenadas X y Z
+		glNormal3f(x, 0, z); // Normal lateral
+		glVertex3f(x * radio, altura / 2, z * radio); // Vértice superior
+		glVertex3f(x * radio, -altura / 2, z * radio); // Vértice inferior
     }
-    glEnd();
+	glEnd(); // Finalizar cuerpo
 
-    // 2. PROCESO ESPINOSO (El hueso que sale hacia atrás)
-    // Simulamos esto con una caja alargada hacia atrás en el eje -Z
-    glPushMatrix();
-    glTranslatef(0.0f, 0.0f, -radio); // Mover al borde trasero
-    // Escalar para formar una aleta: delgada en X, alta en Y, larga en Z
-    glScalef(0.15f, altura * 0.8f, 0.5f);
-
-    // Dibujar cubo simple
-    glBegin(GL_QUADS);
-    // Atrás
-    glNormal3f(0, 0, -1);
-    glVertex3f(-0.5f, 0.5f, -1.0f); glVertex3f(0.5f, 0.5f, -1.0f);
-    glVertex3f(0.5f, -0.5f, -1.0f); glVertex3f(-0.5f, -0.5f, -1.0f);
-    // Lados
-    glNormal3f(1, 0, 0); // Der
-    glVertex3f(0.5f, 0.5f, 0.0f); glVertex3f(0.5f, 0.5f, -1.0f);
-    glVertex3f(0.5f, -0.5f, -1.0f); glVertex3f(0.5f, -0.5f, 0.0f);
-    glNormal3f(-1, 0, 0); // Izq
-    glVertex3f(-0.5f, 0.5f, -1.0f); glVertex3f(-0.5f, 0.5f, 0.0f);
-    glVertex3f(-0.5f, -0.5f, 0.0f); glVertex3f(-0.5f, -0.5f, -1.0f);
-    glEnd();
-    glPopMatrix();
+    // Apófisis Espinosa
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, 0.0f, -radio); // Posicionar atrás
+	glScalef(0.15f, altura * 0.8f, 0.5f); // Escalar apófisis
+	glBegin(GL_QUADS); // Dibujar cubo
+	glNormal3f(0, 0, -1); // Cara trasera
+	glVertex3f(-0.5f, 0.5f, -1.0f); glVertex3f(0.5f, 0.5f, -1.0f); // Vértices
+	glVertex3f(0.5f, -0.5f, -1.0f); glVertex3f(-0.5f, -0.5f, -1.0f); // Vértices
+    // Lados...
+	glNormal3f(1, 0, 0); glVertex3f(0.5f, 0.5f, 0.0f); glVertex3f(0.5f, 0.5f, -1.0f); // Vértices
+	glVertex3f(0.5f, -0.5f, -1.0f); glVertex3f(0.5f, -0.5f, 0.0f); // Vértices
+	glNormal3f(-1, 0, 0); glVertex3f(-0.5f, 0.5f, -1.0f); glVertex3f(-0.5f, 0.5f, 0.0f); // Vértices
+	glVertex3f(-0.5f, -0.5f, 0.0f); glVertex3f(-0.5f, -0.5f, -1.0f); // Vértices
+	glEnd(); // Finalizar apófisis
+	glPopMatrix(); // Restaurar estado
 }
 
+// Modelo: Esqueleto (Columna y Costillas)
 void dibujarCostillas()
 {
-    glColor4f(0.9f, 0.9f, 0.85f, 1.0f); // Color Hueso
+	glColor4f(0.9f, 0.9f, 0.85f, 1.0f); // Color hueso
 
-    // --- 1. COLUMNA VERTEBRAL (SEGMENTADA) ---
-    glPushMatrix();
-    // Posicionamos la columna detrás de los pulmones
-    glTranslatef(0.0f, -0.5f, -2.7f);
-
-    int numVertebras = 18; // Cantidad de vértebras
-    float alturaTotal = 5.0f;
-    float alturaVertebra = alturaTotal / numVertebras;
-
-    // Dibujamos una pila de vértebras
+    // 1. COLUMNA VERTEBRAL
+	glPushMatrix(); // Guardar estado
+	glTranslatef(0.0f, -0.5f, -2.7f); // Posicionar columna
+	int numVertebras = 18; // Número de vértebras
+	float alturaTotal = 5.0f; // Altura total de la columna
+	float alturaVertebra = alturaTotal / numVertebras; // Altura por vértebra
+	// Dibujar cada vértebra
     for (int i = 0; i < numVertebras; i++)
     {
-        glPushMatrix();
-        // Calculamos la Y para apilarlas. 
-        // (i - numVertebras/2) centra la pila verticalmente
-        float yRel = (i - numVertebras / 2.0f) * alturaVertebra;
-
-        glTranslatef(0.0f, yRel, 0.0f);
-
-        // Pequeña variación de tamaño para que no se vea como un tubo perfecto
-        float escalaAncho = 1.0f + 0.1f * sin(i * 0.5f);
-
-        // Dibujamos la vértebra (Radio 0.4, Altura con un pequeño gap para el disco)
-        dibujarVertebra(0.35f * escalaAncho, alturaVertebra * 0.85f);
-        glPopMatrix();
+		glPushMatrix(); // Guardar estado
+		float yRel = (i - numVertebras / 2.0f) * alturaVertebra; // Posición Y relativa
+		glTranslatef(0.0f, yRel, 0.0f); // Posicionar vértebra
+		float escalaAncho = 1.0f + 0.1f * sin(i * 0.5f); // Variación de ancho
+		dibujarVertebra(0.35f * escalaAncho, alturaVertebra * 0.85f); // Dibujar vértebra
+		glPopMatrix(); // Restaurar estado
     }
-    glPopMatrix();
+	glPopMatrix();	// Restaurar estado
 
-    // 2. COSTILLAS (Con efecto abanico)
-    int numCostillas = 10;
-    int ladosTubo = 12;
-    float radioTubo = 0.08f;
-
+    // 2. COSTILLAS
+	int numCostillas = 10; // Número de costillas
+	int ladosTubo = 12; // Lados del tubo de la costilla
+	float radioTubo = 0.08f; // Radio del tubo de la costilla
+	// Dibujar cada costilla
     for (int i = 0; i < numCostillas; i++)
     {
-        // --- AJUSTE 1: POSICIÓN VERTICAL ---
-        // Usamos 0.38f en vez de 0.45f para pegarlas más entre sí desde la base.
-        float yPos = 1.2f - (i * 0.7f);
-
-        // --- AJUSTE 2: FORMA DEL TÓRAX ---
-        float ancho = 2.5f + sin(i * 0.35f) * 1.0f;
-        float profundidad = 2.5f;
-
-        // --- AJUSTE 3: ÁNGULO DE CAÍDA (ABANICO) ---
-        // Fórmula Cuadrática: (i * i * 0.5f)
-        // Esto hace que las primeras costillas apenas roten (se mantengan juntas)
-        // y las últimas roten muchísimo más rápido (se separen).
-        // i=0 -> 10 grados
-        // i=1 -> 10.5 grados (Diferencia 0.5) -> ¡Muy pegadas!
-        // i=9 -> 50.5 grados (Diferencia grande) -> ¡Muy separadas!
-        float anguloCaida = 10.0f + (i * i * 0.5f);
-
-        // Límite del arco (Tu lógica anterior, mantenida)
-        int limiteArco = 29 - (i * 0.7);
-
-        glPushMatrix();
-        glTranslatef(0.0f, yPos, -0.3f);
-        glRotatef(anguloCaida, 1.0f, 0.0f, 0.0f);
-        glScalef(ancho, 1.0f, profundidad);
-
+		float yPos = 1.2f - (i * 0.7f); // Posición Y de la costilla
+		float ancho = 2.5f + sin(i * 0.35f) * 1.0f; // Ancho variable
+		float profundidad = 2.5f; // Profundidad constante
+        float anguloCaida = 10.0f + (i * i * 0.5f); // Curva exponencial
+        int limiteArco = 29 - (i * 0.7f); // Apertura progresiva
+		// Dibujar costilla como tubo curvado
+		glPushMatrix(); // Guardar estado
+		glTranslatef(0.0f, yPos, -0.3f); // Posicionar costilla
+		glRotatef(anguloCaida, 1.0f, 0.0f, 0.0f); // Inclinación hacia adelante
+		glScalef(ancho, 1.0f, profundidad); // Escalar costilla
+		// Dibujar tubo curvado
         for (int k = -limiteArco; k < limiteArco; k++)
         {
-            float ang1 = k * 0.1f;
-            float ang2 = (k + 1) * 0.1f;
-
+			float ang1 = k * 0.1f; // Ángulo inicial
+			float ang2 = (k + 1) * 0.1f; // Ángulo siguiente
+			// Dibujar segmento del tubo
             glBegin(GL_TRIANGLE_STRIP);
+			// Iterar sobre los lados del tubo
             for (int j = 0; j <= ladosTubo; j++)
             {
-                float angTubo = j * 6.2831f / ladosTubo;
-                float c_tubo = cos(angTubo);
-                float s_tubo = sin(angTubo);
-
-                float R1 = 1.0f + radioTubo * c_tubo;
-                float x1 = sin(ang1) * R1;
-                float y1 = radioTubo * s_tubo;
-                float z1 = -cos(ang1) * R1;
-
-                float nx1 = sin(ang1) * c_tubo;
-                float ny1 = s_tubo;
-                float nz1 = -cos(ang1) * c_tubo;
-
-                glNormal3f(nx1, ny1, nz1);
-                glVertex3f(x1, y1, z1);
-
-                float R2 = 1.0f + radioTubo * c_tubo;
-                float x2 = sin(ang2) * R2;
-                float y2 = y1;
-                float z2 = -cos(ang2) * R2;
-
-                float nx2 = sin(ang2) * c_tubo;
-                float nz2 = -cos(ang2) * c_tubo;
-
-                glNormal3f(nx2, ny1, nz2);
-                glVertex3f(x2, y2, z2);
+				float angTubo = j * 2.0f * PI / ladosTubo; // Ángulo alrededor del tubo
+				float c_tubo = cos(angTubo); // Componente coseno 
+				float s_tubo = sin(angTubo); // Componente seno
+				// Vértices y normales
+				float R1 = 1.0f + radioTubo * c_tubo; // Radio en ang1
+				float x1 = sin(ang1) * R1; float y1 = radioTubo * s_tubo; float z1 = -cos(ang1) * R1; // Coordenadas en ang1
+				float nx1 = sin(ang1) * c_tubo; float ny1 = s_tubo; float nz1 = -cos(ang1) * c_tubo; // Normal en ang1
+				// Vértice en ang1
+                glNormal3f(nx1, ny1, nz1); glVertex3f(x1, y1, z1); 
+				// Vértice en ang2
+				float R2 = 1.0f + radioTubo * c_tubo; // Radio en ang2
+				float x2 = sin(ang2) * R2; float y2 = y1; float z2 = -cos(ang2) * R2; // Coordenadas en ang2
+				float nx2 = sin(ang2) * c_tubo; float nz2 = -cos(ang2) * c_tubo; // Normal en ang2
+				// Vértice en ang2
+                glNormal3f(nx2, ny1, nz2); glVertex3f(x2, y2, z2);
             }
-            glEnd();
+			glEnd(); // Finalizar segmento
         }
-        glPopMatrix();
+		glPopMatrix(); // Restaurar estado
     }
 }
 
+// Modelo Completo: Combina todos los elementos
 void dibujarModeloCompleto()
 {
-    // 1. DIBUJAR ESTRUCTURA INTERNA
+    // 1. Dibujar Estructura Interna
     dibujarTraqueaYBronquios();
-
-    // 2. Costillas (NUEVO)
-    if (mostrarCostillas) {
+    // 2. Dibujar Esqueleto (Si está activo)
+    if (mostrarCostillas) 
+	{
         dibujarCostillas();
     }
-
-    if (texturaPulmonID != 0) {
+    // 3. Configurar Texturas para Pulmones
+    if (texturaPulmonID != 0) 
+	{
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, texturaPulmonID);
     }
-
+	// 4. Dibujar Pulmones
     float escalaGlobal = 1.6f;
 
     // --- PULMON IZQUIERDO ---
-    glPushMatrix();
-    glTranslatef(1.8f, -1.5f, 0.0f);
-    glRotatef(0.0f, 0.0f, 0.0f, 1.0f);
-    glScalef(escalaGlobal, escalaGlobal, escalaGlobal);
-
-    if (transPulmonIzq) {
-        glColor4f(1.0f, 1.0f, 1.0f, 0.4f);
-    }
-    else {
-        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    }
-
+	glPushMatrix(); // Guardar estado
+	glTranslatef(1.8f, -1.5f, 0.0f); // Posicionar pulmón izquierdo
+	glRotatef(0.0f, 0.0f, 0.0f, 1.0f); // Rotación (si es necesario)
+	glScalef(escalaGlobal, escalaGlobal, escalaGlobal); // Escala global
+	// Configurar color y transparencia
+	if (transPulmonIzq) glColor4f(1.0f, 1.0f, 1.0f, 0.4f); // Transparente
+	else glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // Opaco
+	// Dibujar malla del pulmón izquierdo
     dibujarPulmonMalla(true);
+	// Restaurar estado
     glPopMatrix();
 
     // --- PULMON DERECHO ---
-    glPushMatrix();
-    glTranslatef(-1.8f, -1.5f, 0.0f);
-    glRotatef(0.0f, 0.0f, 0.0f, 1.0f);
-    glScalef(escalaGlobal, escalaGlobal, escalaGlobal);
-
-    if (transPulmonDer) {
-        glColor4f(1.0f, 1.0f, 1.0f, 0.4f);
-    }
-    else {
-        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    }
-
+	glPushMatrix(); // Guardar estado
+	glTranslatef(-1.8f, -1.5f, 0.0f); // Posicionar pulmón derecho
+	glRotatef(0.0f, 0.0f, 0.0f, 1.0f); // Rotación (si es necesario)
+	glScalef(escalaGlobal, escalaGlobal, escalaGlobal); // Escala global
+	// Configurar color y transparencia
+	if (transPulmonDer) glColor4f(1.0f, 1.0f, 1.0f, 0.4f); // Transparente
+	else glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // Opaco
+	// Dibujar malla del pulmón derecho
     dibujarPulmonMalla(false);
+	// Restaurar estado
     glPopMatrix();
 
-    if (texturaPulmonID != 0) glDisable(GL_TEXTURE_2D);
+	if (texturaPulmonID != 0) glDisable(GL_TEXTURE_2D);// Desactivar texturas
 }
 
-// --- MAIN ---
+// --- MAIN (PUNTO DE ENTRADA) ---
+// Función Principal
 int main(void)
 {
-    GLFWwindow* window;
-    if (!glfwInit()) return -1;
+	GLFWwindow* window; // Ventana GLFW
 
-    window = glfwCreateWindow(ANCHO_VENTANA, ALTO_VENTANA, "Torax 3D - Flechas para mover, 1/2 Transparencia", NULL, NULL);
-    if (!window) { glfwTerminate(); return -1; }
+    /* Inicializar Librería */
+	if (!glfwInit()) return -1; // Fallo al inicializar GLFW
 
-    glfwMakeContextCurrent(window);
+    /* Crear Ventana y Contexto */
+	window = glfwCreateWindow(ANCHO_VENTANA, ALTO_VENTANA, "Torax 3D - Grupo 01 COGRAVI - UPN", NULL, NULL); // Crear ventana
+	if (!window) { glfwTerminate(); return -1; } // Fallo al crear ventana
 
-    if (!inicializarOpenGL()) { glfwTerminate(); return -1; }
+	glfwMakeContextCurrent(window); // Hacer contexto actual
 
-    glfwSetFramebufferSizeCallback(window, callbackCambioTamano);
+    /* Inicializar OpenGL */
+	if (!inicializarOpenGL()) { glfwTerminate(); return -1; } // Fallo al inicializar OpenGL
 
-    configurarProyeccion(ANCHO_VENTANA, ALTO_VENTANA);
+    // Configurar Callbacks
+	glfwSetFramebufferSizeCallback(window, callbackCambioTamano); // Cambio de tamaño de ventana
 
+    // Configuración Inicial de Vista
+	configurarProyeccion(ANCHO_VENTANA, ALTO_VENTANA); // Configurar proyección inicial
+
+    /* Bucle Principal */
     while (!glfwWindowShouldClose(window))
     {
+		// 1. Procesar Entrada del usuario
         procesarEntrada(window);
 
-        double tiempo = glfwGetTime();
-        factorRespiracion = 1.0f + 0.05f * sin(tiempo * 2.0f);
+        // 2. Actualizar Lógica (Animación)
+		double tiempo = glfwGetTime(); // Tiempo
+		factorRespiracion = 1.0f + 0.05f * sin(tiempo * 2.0f); // Factor de respiración
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // 3. Renderizar
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpiar buffers
+		// Configurar cámara
+		glMatrixMode(GL_MODELVIEW); // Cambiar a modelo-vista
+		glLoadIdentity(); // Resetear matriz
+		glTranslatef(0.0f, 0.0f, -camDist); // Alejar cámara
+		glRotatef(camPitch, 1.0f, 0.0f, 0.0f); // Rotar cámara vertical
+		glRotatef(camYaw, 0.0f, 1.0f, 0.0f); // Rotar cámara horizontal
+		// Dibujar modelo completo
+		dibujarModeloCompleto(); // Dibujar escena
 
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        glTranslatef(0.0f, 0.0f, -camDist);
-        glRotatef(camPitch, 1.0f, 0.0f, 0.0f);
-        glRotatef(camYaw, 0.0f, 1.0f, 0.0f);
-
-        dibujarModeloCompleto();
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        // 4. Intercambiar Buffers y Eventos
+		glfwSwapBuffers(window); // Intercambiar buffers
+		glfwPollEvents(); // Procesar eventos
     }
-
+	// Finalizar
     glfwTerminate();
-    return 0;
+	return 0; // Éxito
 }
