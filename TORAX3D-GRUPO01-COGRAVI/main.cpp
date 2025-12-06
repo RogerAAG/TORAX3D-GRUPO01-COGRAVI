@@ -23,6 +23,7 @@
 #include <GLFW/glfw3.h> //Se incluye la librería para manejo de ventanas y OpenGL
 #define STB_IMAGE_IMPLEMENTATION //Definición para la implementación de la librería stb_image
 #include "include/stb_image.h" //Se incluye la librería para carga de imágenes
+#include "include/stb_easy_font.h"
 
  // --- CONSTANTES Y GLOBALES ---
 // Dimensiones de la Ventana
@@ -730,6 +731,233 @@ void dibujarModeloCompleto()
 	dibujarTorsoTejidoBlando(); // Dibujar torso
 }
 
+// Texto 2D en pantalla usando stb_easy_font
+void dibujarTexto2D(const char* texto, float x, float y, float r, float g, float b)
+{
+	// Buffer para vértices
+	char buffer[99999];
+	// Generar geometría del texto
+	int num_quads = stb_easy_font_print(
+		0.0f, 0.0f,           
+		(char*)texto,
+		NULL,
+		buffer, sizeof(buffer)
+	);
+	// Configurar estado OpenGL
+	glDisable(GL_LIGHTING); // Desactivar iluminación
+	glDisable(GL_TEXTURE_2D); // Desactivar texturas
+	glColor3f(r, g, b);// Color del texto
+	glPushMatrix(); // Guardar estado
+	// Posicionar texto
+	glTranslatef(x, y, 0.0f);
+	// Escalar texto
+	glScalef(2.0f, 2.0f, 1.0f);
+	// Dibujar texto usando vertex arrays
+	glEnableClientState(GL_VERTEX_ARRAY); // Habilitar array de vértices
+	glVertexPointer(2, GL_FLOAT, 16, buffer); // Configurar puntero de vértices
+	glDrawArrays(GL_QUADS, 0, num_quads * 4); // Dibujar quads
+	glDisableClientState(GL_VERTEX_ARRAY); // Deshabilitar array de vértices
+	
+	glPopMatrix(); // Restaurar estado
+
+	glEnable(GL_LIGHTING); // Reactivar iluminación
+}
+
+// Proyectar punto 3D a coordenadas de pantalla 2D
+bool proyectarAPantalla(const GLdouble model[16],// Matriz de modelo
+	const GLdouble proj[16], // Matriz de proyección
+	const GLint viewport[4], // Viewport
+	float x, float y, float z, // Punto 3D
+	float& sx, float& sy) // Punto 2D resultante
+{
+	// Convertir punto 3D a coordenadas homogéneas
+	double vx = x, vy = y, vz = z, vw = 1.0;
+
+	// Aplicar matriz de modelo
+	double mx = model[0] * vx + model[4] * vy + model[8] * vz + model[12] * vw; // X
+	double my = model[1] * vx + model[5] * vy + model[9] * vz + model[13] * vw; // Y
+	double mz = model[2] * vx + model[6] * vy + model[10] * vz + model[14] * vw; // Z
+	double mw = model[3] * vx + model[7] * vy + model[11] * vz + model[15] * vw; // W
+
+	// Aplicar matriz de proyección
+	double px = proj[0] * mx + proj[4] * my + proj[8] * mz + proj[12] * mw; // X
+	double py = proj[1] * mx + proj[5] * my + proj[9] * mz + proj[13] * mw; // Y
+	double pz = proj[2] * mx + proj[6] * my + proj[10] * mz + proj[14] * mw; // Z
+	double pw = proj[3] * mx + proj[7] * my + proj[11] * mz + proj[15] * mw; // W
+	// Verificar división por cero
+	if (pw == 0.0) 
+		return false;// No se puede proyectar
+
+	// Convertir a coordenadas normalizadas
+	px /= pw; // Normalizar X
+	py /= pw; // Normalizar Y
+	pz /= pw; // Normalizar Z
+
+	// Verificar si el punto está dentro del volumen de recorte
+	if (pz < -1.0 || pz > 1.0)
+		return false; // Fuera del volumen de recorte
+	// Convertir a coordenadas de ventana
+	sx = (float)(viewport[0] + (px + 1.0) * 0.5 * viewport[2]); // X en pantalla
+	sy = (float)(viewport[1] + (py + 1.0) * 0.5 * viewport[3]); // Y en pantalla
+	
+	return true; // Proyección exitosa
+}
+
+// Dibujar etiquetas de las partes del modelo
+void dibujarEtiquetasPartes()
+{
+	// Obtener matrices y viewport actuales
+	GLdouble model[16], proj[16]; // Matrices
+	GLint viewport[4]; // Viewport
+	
+	glGetDoublev(GL_MODELVIEW_MATRIX, model); // Obtener matriz de modelo
+	glGetDoublev(GL_PROJECTION_MATRIX, proj); // Obtener matriz de proyección
+	glGetIntegerv(GL_VIEWPORT, viewport); // Obtener viewport
+
+	// Definir etiquetas 3D
+	struct Label3D {
+		const char* texto; // Texto de la etiqueta
+		float x, y, z; // Posición 3D
+		float r, g, b; // Color
+	};
+	// Lista de etiquetas
+	std::vector<Label3D> labels;
+
+	// Etiquetas de los pulmones
+	labels.push_back({ "Pulmon izquierdo",  1.8f, -1.5f,  0.5f,   1.0f, 1.0f, 0.6f }); // Pulmón izquierdo
+	labels.push_back({ "Pulmon derecho",   -1.8f, -1.5f,  0.5f,   1.0f, 1.0f, 0.6f }); // Pulmón derecho
+
+	// Etiquetas de la tráquea y bronquios
+	labels.push_back({ "Traquea",     0.0f,  1.5f,  0.0f,   0.8f, 0.9f, 1.0f }); // Tráquea
+	labels.push_back({ "Bronquios",   0.0f,  0.1f,  0.0f,   0.8f, 0.9f, 1.0f }); // Bronquios
+	labels.push_back({ "Bronquiolos", 0.0f, -0.9f,  0.0f,   0.8f, 0.9f, 1.0f }); // Bronquiolos
+
+	// Etiquetas de la columna y costillas (si se muestran)
+	if (mostrarCostillas)
+	{
+		labels.push_back({ "Columna vertebral", 0.0f,  0.0f, -2.7f,   0.9f, 0.9f, 0.9f }); // Columna vertebral
+		labels.push_back({ "Costillas",         0.0f,  0.8f, -1.5f,   0.9f, 0.9f, 0.9f }); // Costillas
+	}
+
+	// Etiqueta del torso (si no es translúcido)
+	if (!torsoTranslucido)
+	{
+		labels.push_back({ "Tejido blando / Torso", 0.0f, -0.5f,  1.0f,   1.0f, 0.8f, 0.7f }); // Torso
+	}
+
+	// Proyectar etiquetas 3D a 2D
+	struct Label2D {
+		const char* texto; // Texto de la etiqueta
+		float sx, sy; // Posición en pantalla
+		float r, g, b; // Color
+		bool visible; // Visibilidad
+	};
+
+	std::vector<Label2D> labels2D(labels.size()); // Vector para etiquetas 2D
+	// Proyectar cada etiqueta
+	for (size_t i = 0; i < labels.size(); ++i)
+	{
+		float sx, sy; // Coordenadas en pantalla
+		// Proyectar punto 3D a 2D
+		bool ok = proyectarAPantalla(
+			model, proj, viewport, 
+			labels[i].x, labels[i].y, labels[i].z,
+			sx, sy
+		);
+
+		// Convertir coordenada Y a sistema de pantalla
+		float syPantalla = (float)ALTO_VENTANA - sy;
+		// Almacenar etiqueta 2D
+		labels2D[i].texto = labels[i].texto; // Texto
+		labels2D[i].sx = sx; // Coordenada X en pantalla
+		labels2D[i].sy = syPantalla; // Coordenada Y en pantalla
+		labels2D[i].r = labels[i].r; // Color R
+		labels2D[i].g = labels[i].g; // Color G
+		labels2D[i].b = labels[i].b; // Color B
+		labels2D[i].visible = ok; // Visibilidad
+	}
+
+	// Configurar proyección ortográfica para texto 2D
+	glMatrixMode(GL_PROJECTION); // Cambiar a proyección
+	glPushMatrix(); // Guardar matriz
+	glLoadIdentity(); // Cargar identidad
+	glOrtho(0, ANCHO_VENTANA, ALTO_VENTANA, 0, -1, 1); // Proyección ortográfica
+	// Cambiar a modelo-vista
+	glMatrixMode(GL_MODELVIEW); // Cambiar a modelo-vista
+	glPushMatrix(); // Guardar matriz
+	glLoadIdentity(); // Cargar identidad
+
+	glDisable(GL_DEPTH_TEST); // Desactivar prueba de profundidad
+
+	// Dibujar cada etiqueta visible
+	for (size_t i = 0; i < labels2D.size(); ++i)
+	{
+		if (!labels2D[i].visible) continue; // Saltar si no es visible
+
+		// Dibujar texto en pantalla
+		dibujarTexto2D(
+			labels2D[i].texto, // Texto
+			labels2D[i].sx, // Coordenada X
+			labels2D[i].sy, // Coordenada Y
+			labels2D[i].r, // Color R
+			labels2D[i].g, // Color G
+			labels2D[i].b // Color B
+		);
+	}
+	// Reactivar prueba de profundidad
+	glEnable(GL_DEPTH_TEST);
+
+	// Restaurar matrices
+	glPopMatrix(); //Restaurar modelo-vista        
+	glMatrixMode(GL_PROJECTION); // Cambiar a proyección
+	glPopMatrix(); // Restaurar proyección
+	glMatrixMode(GL_MODELVIEW); // Volver a modelo-vista
+}
+
+// Dibujar leyenda de controles en pantalla
+void dibujarLeyendaTeclas()
+{
+	// Configurar proyección ortográfica para texto 2D
+	glMatrixMode(GL_PROJECTION); // Cambiar a proyección
+	glPushMatrix(); // Guardar matriz
+	glLoadIdentity(); // Cargar identidad
+	glOrtho(0, ANCHO_VENTANA, ALTO_VENTANA, 0, -1, 1); // Proyección ortográfica
+	// Cambiar a modelo-vista
+	glMatrixMode(GL_MODELVIEW); // Cambiar a modelo-vista
+	glPushMatrix(); // Guardar matriz
+	glLoadIdentity(); // Cargar identidad
+
+	// Desactivar prueba de profundidad
+	glDisable(GL_DEPTH_TEST);
+
+	// Posición inicial para el texto
+	float x = 10.0f; // Margen izquierdo
+	float y = 20.0f; // Margen superior
+
+	// Color del texto
+	float r = 1.0f, g = 1.0f, b = 1.0f;
+
+	// Dibujar líneas de texto
+	dibujarTexto2D("Controles:", x, y, r, g, b);
+	y += 18.0f;  
+	// Instrucciones de control
+	dibujarTexto2D("Flechas : Rotar camara", x, y, r, g, b);	y += 18.0f; 
+	dibujarTexto2D("W / S   : Zoom acercar/alejar", x, y, r, g, b); 	y += 18.0f; 
+	dibujarTexto2D("Numero 1: Pulmon izquierdo transparente", x, y, r, g, b);	y += 18.0f; 
+	dibujarTexto2D("Numero 2: Pulmon derecho transparente", x, y, r, g, b);	y += 18.0f; 
+	dibujarTexto2D("Numero 3: Mostrar/Ocultar costillas + columna", x, y, r, g, b); 	y += 18.0f;
+	dibujarTexto2D("Numero 4: Torso translucido / opaco", x, y, r, g, b);	y += 18.0f;
+	// Restaurar matrices
+	glEnable(GL_DEPTH_TEST);
+
+	// Restaurar matrices
+	glPopMatrix(); //Restaurar modelo-vista       
+	glMatrixMode(GL_PROJECTION); // Cambiar a proyección
+	glPopMatrix(); // Restaurar proyección
+	glMatrixMode(GL_MODELVIEW); // Volver a modelo-vista
+}
+
+
 // --- MAIN (PUNTO DE ENTRADA) ---
 // Función Principal
 int main(void)
@@ -774,6 +1002,8 @@ int main(void)
 		glRotatef(camYaw, 0.0f, 1.0f, 0.0f); // Rotar cámara horizontal
 		// Dibujar modelo completo
 		dibujarModeloCompleto(); // Dibujar escena
+		dibujarEtiquetasPartes(); // Dibujar etiquetas
+		dibujarLeyendaTeclas(); // Dibujar leyenda de controles
 
         // 4. Intercambiar Buffers y Eventos
 		glfwSwapBuffers(window); // Intercambiar buffers
