@@ -824,13 +824,13 @@ void dibujarEtiquetasPartes()
 	std::vector<Label3D> labels;
 
 	// Etiquetas de los pulmones
-	labels.push_back({ "Pulmon izquierdo",  1.8f, -1.5f,  0.5f,   1.0f, 1.0f, 0.6f }); // Pulmón izquierdo
-	labels.push_back({ "Pulmon derecho",   -1.8f, -1.5f,  0.5f,   1.0f, 1.0f, 0.6f }); // Pulmón derecho
+	labels.push_back({ "Pulmon izquierdo",  1.8f, -1.0f,  0.5f,   1.0f, 1.0f, 0.6f }); // Pulmón izquierdo
+	labels.push_back({ "Pulmon derecho",   -1.8f, -1.0f,  0.5f,   1.0f, 1.0f, 0.6f }); // Pulmón derecho
 
 	// Etiquetas de la tráquea y bronquios
 	labels.push_back({ "Traquea",     0.0f,  1.5f,  0.0f,   0.8f, 0.9f, 1.0f }); // Tráquea
-	labels.push_back({ "Bronquios",   0.0f,  0.1f,  0.0f,   0.8f, 0.9f, 1.0f }); // Bronquios
-	labels.push_back({ "Bronquiolos", 0.0f, -0.9f,  0.0f,   0.8f, 0.9f, 1.0f }); // Bronquiolos
+	labels.push_back({ "Bronquios",   0.0f, -0.2f,  0.0f,   0.8f, 0.9f, 1.0f }); // Bronquios
+	labels.push_back({ "Bronquiolos", 0.0f, -1.5f,  0.0f,   0.8f, 0.9f, 1.0f }); // Bronquiolos
 
 	// Etiquetas de la columna y costillas (si se muestran)
 	if (mostrarCostillas)
